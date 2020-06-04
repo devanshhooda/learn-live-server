@@ -14,7 +14,7 @@ const userSchema = mongoose.Schema({
         type: String
     },
     age: {
-        type: String
+        type: Number
     },
     profession: {
         type: String
@@ -26,7 +26,7 @@ const userSchema = mongoose.Schema({
         type: String
     },
     graduationYear: {
-        type: String
+        type: Number
     },
     currentCity: {
         type: String
@@ -37,6 +37,9 @@ const userSchema = mongoose.Schema({
     bio: {
         type: String
     },
+    connects: [{ type: String }],
+    receivedRequests: [{ type: String }],
+    sentRequests: [{ type: String }],
     interests: [{ type: String }],
     createdOn: {
         type: Date,

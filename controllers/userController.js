@@ -36,6 +36,9 @@ router.post('/create',
 
         const accessToken = jwt.sign({ phone: phoneNumber }, process.env.ACCESS_TOKEN_SECRET);
 
+        console.log('Body : ');
+        console.log(req.body);
+
         userModel.create({
             phoneNumber: phoneNumber,
             password: hashedPassword,
@@ -55,7 +58,7 @@ router.post('/create',
                 return res.json({
                     status: true,
                     message: 'user created',
-                    userInfo: result,
+                    userDetails: result,
                     token: accessToken
                 });
             }
@@ -66,10 +69,10 @@ router.post('/create',
 router.put('/update',
     (req, res) => {
         // checki
-        if (!req.query.phoneNumber) {
+        if (!req.query.userId) {
             return res.json({
                 status: false,
-                message: 'Phone number is not provided !'
+                message: 'Id is not provided !'
             });
         }
 
@@ -96,20 +99,12 @@ router.put('/update',
                 });
             }
 
-            // console.log('body : ');
-            // console.log(req.body);
-            // console.log(req.body.age);
-            // console.log(req.body.graduationYear);
-
-            // req.body.age = Number(req.body.age);
-            // req.body.graduationYear = Number(req.body.graduationYear);
-            // console.log('After parsing : ');
-            // console.log(req.body.age);
-            // console.log(req.body.graduationYear);
+            console.log('body : ');
+            console.log(req.body);
 
             // token matched
-            userModel.findOneAndUpdate(
-                { phoneNumber: req.query.phoneNumber }, req.body,
+            userModel.findByIdAndUpdate(
+                req.query.userId, req.body,
                 (err, result) => {
 
                     // if there is any problem in updating data in db
@@ -152,6 +147,9 @@ router.post('/login',
                 errors: errors
             });
         }
+
+        console.log('Body : ');
+        console.log(req.body);
 
         const phoneNumber = req.body.phoneNumber;
         userModel.findOne(
@@ -213,7 +211,7 @@ router.get('/showAll', (req, res) => {
 
     jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
         if (err) {
-            // if token doesn'y matches
+            // if token doesn't matches
             return res.json({
                 status: false,
                 message: 'Invalid token !',
@@ -242,6 +240,200 @@ router.get('/showAll', (req, res) => {
             });
     });
 
+});
+
+router.get('/getUser', (req, res) => {
+    const authHeader = req.headers['authorization'];
+
+    const token = authHeader && authHeader.split(' ')[1];
+
+    // check if token is null
+    if (token == null) {
+        return res.json({
+            status: false,
+            message: 'Token is null !'
+        });
+    }
+
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
+        if (err) {
+            // if token doesn't matches
+            return res.json({
+                status: false,
+                message: 'Invalid token !',
+                error: err
+            });
+        }
+
+        // token matched
+        userModel.findById(req.query.userId, { password: 0 }, (err, result) => {
+            if (err) {
+                return res.json({
+                    status: false,
+                    message: 'User fetching failed !',
+                    error: err
+                });
+            }
+
+            return res.json({
+                status: true,
+                message: 'User fetched',
+                userDetails: result
+            });
+        });
+    });
+});
+
+router.put('/sendConnectionRequest', (req, res) => {
+
+    const authHeader = req.headers['authorization'];
+
+    const token = authHeader && authHeader.split(' ')[1];
+
+    // check if token is null
+    if (token == null) {
+        return res.json({
+            status: false,
+            message: 'Token is null !'
+        });
+    }
+
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
+        if (err) {
+            // if token doesn't matches
+            return res.json({
+                status: false,
+                message: 'Invalid token !',
+                error: err
+            });
+        }
+
+        console.log('body : ');
+        console.log(req.body);
+
+        userModel.findByIdAndUpdate(req.body.sendingId,
+            { $push: { sentRequests: req.body.receivingId } },
+            (err, result) => {
+                if (err) {
+                    return res.json({
+                        status: false,
+                        error: err
+                    });
+                }
+
+                userModel.findByIdAndUpdate(req.body.receivingId,
+                    { $push: { receivedRequests: req.body.sendingId } },
+                    (err, result) => {
+                        if (err) {
+                            return res.json({
+                                status: false,
+                                error: err
+                            });
+                        }
+
+                        return res.json({
+                            status: true,
+                            message: `Request sent to ${req.body.sendingId} by ${req.body.receivingId}`
+                        });
+                    }
+                );
+            });
+    });
+});
+
+router.put('/respondConnectionRequest', (req, res) => {
+    const authHeader = req.headers['authorization'];
+
+    const token = authHeader && authHeader.split(' ')[1];
+
+    // check if token is null
+    if (token == null) {
+        return res.json({
+            status: false,
+            message: 'Token is null !'
+        });
+    }
+
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
+        if (err) {
+            // if token doesn't matches
+            return res.json({
+                status: false,
+                message: 'Invalid token !',
+                error: err
+            });
+        }
+
+        console.log('body : ');
+        console.log(req.body);
+
+        // if request is accepted
+        if (req.body.connectResponse) {
+            // console.log(1);
+            
+            // work of responding user
+            userModel.findByIdAndUpdate(req.body.respondingId,
+                { $pop: { receivedRequests: req.body.receivingId }, $push: { connects: req.body.receivingId } },
+                (err, result) => {
+                    // console.log(2);
+                    if (err) {
+                        return res.json({
+                            status: false,
+                            error: err
+                        });
+                    }
+
+                    // work of receiving user
+                    userModel.findByIdAndUpdate(req.body.receivingId,
+                        { $push: { connects: req.body.respondingId }, $pop: { sentRequests: req.body.respondingId } },
+                        (err, result) => {
+                            if (err) {
+                                return res.json({
+                                    status: false,
+                                    error: err
+                                });
+                            }
+
+                            return res.json({
+                                status: true,
+                                message: `Request sent to ${req.sendingId} by ${req.receivingId}`
+                            });
+                        }
+                    );
+                });
+        }
+
+        // if request is declined
+        // work of responding user
+        userModel.findByIdAndUpdate(req.body.respondingId,
+            { $pop: { receivedRequests: req.body.receivingId } },
+            (err, result) => {
+                if (err) {
+                    return res.json({
+                        status: false,
+                        error: err
+                    });
+                }
+
+                // work of receiving user
+                userModel.findByIdAndUpdate(req.body.receivingId,
+                    { $pop: { sentRequests: req.respondingId } },
+                    (err, result) => {
+                        if (err) {
+                            return res.json({
+                                status: false,
+                                error: err
+                            });
+                        }
+
+                        return res.json({
+                            status: true,
+                            message: `Request sent by ${req.sendingId} by is declined`
+                        });
+                    }
+                );
+            });
+    });
 });
 
 module.exports = router;
