@@ -242,6 +242,60 @@ router.get('/showAll', (req, res) => {
 
 });
 
+router.put('/showOnly', (req, res) => {
+
+    const authHeader = req.headers['authorization'];
+
+    const token = authHeader && authHeader.split(' ')[1];
+
+    // check if token is null
+    if (token == null) {
+        return res.json({
+            status: false,
+            message: 'Token is null !'
+        });
+    }
+
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
+        if (err) {
+            // if token doesn't matches
+            return res.json({
+                status: false,
+                message: 'Invalid token !',
+                error: err
+            });
+        }
+        console.log('Body : ');
+        console.log(req.body);
+
+        // token matched
+        userModel.find({
+            profession: { $all: req.body.profession },
+            company: { $all: req.body.company },
+            institute: { $all: req.body.institute }
+        },
+            { password: 0 },
+            (err, result) => {
+                // check error
+                if (err) {
+                    return res.json({
+                        status: false,
+                        message: 'Users fetching failed !',
+                        errors: err
+                    });
+                }
+                console.log(result);
+
+                // if there is no error
+                return res.json({
+                    status: true,
+                    message: 'All users are fetched',
+                    users: result
+                });
+            });
+    });
+});
+
 router.get('/getUser', (req, res) => {
     const authHeader = req.headers['authorization'];
 
@@ -319,24 +373,24 @@ router.put('/sendConnectionRequest', (req, res) => {
                         status: false,
                         error: err
                     });
-                }
-
-                userModel.findByIdAndUpdate(req.body.receivingId,
-                    { $push: { receivedRequests: req.body.sendingId } },
-                    (err, result) => {
-                        if (err) {
-                            return res.json({
-                                status: false,
-                                error: err
-                            });
+                } else {
+                    userModel.findByIdAndUpdate(req.body.receivingId,
+                        { $push: { receivedRequests: req.body.sendingId } },
+                        (err, result) => {
+                            if (err) {
+                                return res.json({
+                                    status: false,
+                                    error: err
+                                });
+                            } else {
+                                return res.json({
+                                    status: true,
+                                    message: `Request sent to ${req.body.sendingId} by ${req.body.receivingId}`
+                                });
+                            }
                         }
-
-                        return res.json({
-                            status: true,
-                            message: `Request sent to ${req.body.sendingId} by ${req.body.receivingId}`
-                        });
-                    }
-                );
+                    );
+                }
             });
     });
 });
@@ -370,10 +424,10 @@ router.put('/respondConnectionRequest', (req, res) => {
         // if request is accepted
         if (req.body.connectResponse) {
             // console.log(1);
-            
+
             // work of responding user
             userModel.findByIdAndUpdate(req.body.respondingId,
-                { $pop: { receivedRequests: req.body.receivingId }, $push: { connects: req.body.receivingId } },
+                { $pull: { receivedRequests: req.body.receivingId }, $push: { connects: req.body.receivingId } },
                 (err, result) => {
                     // console.log(2);
                     if (err) {
@@ -381,58 +435,58 @@ router.put('/respondConnectionRequest', (req, res) => {
                             status: false,
                             error: err
                         });
-                    }
-
-                    // work of receiving user
-                    userModel.findByIdAndUpdate(req.body.receivingId,
-                        { $push: { connects: req.body.respondingId }, $pop: { sentRequests: req.body.respondingId } },
-                        (err, result) => {
-                            if (err) {
-                                return res.json({
-                                    status: false,
-                                    error: err
-                                });
+                    } else {
+                        // work of receiving user
+                        userModel.findByIdAndUpdate(req.body.receivingId,
+                            { $push: { connects: req.body.respondingId }, $pull: { sentRequests: req.body.respondingId } },
+                            (err, result) => {
+                                if (err) {
+                                    return res.json({
+                                        status: false,
+                                        error: err
+                                    });
+                                } else {
+                                    return res.json({
+                                        status: true,
+                                        message: `Request accepted by ${req.body.respondingId} by ${req.body.receivingId}`
+                                    });
+                                }
                             }
-
-                            return res.json({
-                                status: true,
-                                message: `Request sent to ${req.sendingId} by ${req.receivingId}`
-                            });
-                        }
-                    );
+                        );
+                    }
+                });
+        } else {
+            // if request is declined
+            // work of responding user
+            userModel.findByIdAndUpdate(req.body.respondingId,
+                { $pull: { receivedRequests: req.body.receivingId } },
+                (err, result) => {
+                    if (err) {
+                        return res.json({
+                            status: false,
+                            error: err
+                        });
+                    } else {
+                        // work of receiving user
+                        userModel.findByIdAndUpdate(req.body.receivingId,
+                            { $pull: { sentRequests: req.body.respondingId } },
+                            (err, result) => {
+                                if (err) {
+                                    return res.json({
+                                        status: false,
+                                        error: err
+                                    });
+                                } else {
+                                    return res.json({
+                                        status: true,
+                                        message: `Request declined by ${req.body.respondingId} by ${req.body.receivingId}`
+                                    });
+                                }
+                            }
+                        );
+                    }
                 });
         }
-
-        // if request is declined
-        // work of responding user
-        userModel.findByIdAndUpdate(req.body.respondingId,
-            { $pop: { receivedRequests: req.body.receivingId } },
-            (err, result) => {
-                if (err) {
-                    return res.json({
-                        status: false,
-                        error: err
-                    });
-                }
-
-                // work of receiving user
-                userModel.findByIdAndUpdate(req.body.receivingId,
-                    { $pop: { sentRequests: req.respondingId } },
-                    (err, result) => {
-                        if (err) {
-                            return res.json({
-                                status: false,
-                                error: err
-                            });
-                        }
-
-                        return res.json({
-                            status: true,
-                            message: `Request sent by ${req.sendingId} by is declined`
-                        });
-                    }
-                );
-            });
     });
 });
 

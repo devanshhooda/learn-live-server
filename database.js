@@ -7,7 +7,8 @@ mongoose.connect(
     {
         useNewUrlParser: true,
         useUnifiedTopology: true,
-        useCreateIndex: true
+        useCreateIndex: true,
+        useFindAndModify: false
     },
     (err, link) => {
         assert.equal(err, null, 'Database Connection failed !');
