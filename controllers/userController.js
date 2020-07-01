@@ -3,8 +3,14 @@ const router = require('express').Router();
 const bycryptjs = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { check, validationResult } = require('express-validator');
-
 const userModel = require('../models/userModel');
+const serviceAccount = require('../fcmFile.json');
+const firebaseAdmin = require('firebase-admin');
+
+
+firebaseAdmin.initializeApp({
+    credential: firebaseAdmin.credential.cert(serviceAccount),
+});
 
 router.all('/', (req, res) => {
     return res.json({
@@ -42,6 +48,7 @@ router.post('/create',
         userModel.create({
             phoneNumber: phoneNumber,
             password: hashedPassword,
+            fcmToken: req.body.fcmToken
         },
             (err, result) => {
 
@@ -68,7 +75,7 @@ router.post('/create',
 
 router.put('/update',
     (req, res) => {
-        // checki
+        // validation
         if (!req.query.userId) {
             return res.json({
                 status: false,
@@ -152,8 +159,9 @@ router.post('/login',
         console.log(req.body);
 
         const phoneNumber = req.body.phoneNumber;
-        userModel.findOne(
+        userModel.findOneAndUpdate(
             { phoneNumber: phoneNumber },
+            { fcmToken: req.body.fcmToken },
             (err, result) => {
 
                 if (err) {
@@ -427,7 +435,10 @@ router.put('/respondConnectionRequest', (req, res) => {
 
             // work of responding user
             userModel.findByIdAndUpdate(req.body.respondingId,
-                { $pull: { receivedRequests: req.body.receivingId }, $push: { connects: req.body.receivingId } },
+                {
+                    $pull: { receivedRequests: req.body.receivingId },
+                    $push: { connects: req.body.receivingId }
+                },
                 (err, result) => {
                     // console.log(2);
                     if (err) {
@@ -438,7 +449,10 @@ router.put('/respondConnectionRequest', (req, res) => {
                     } else {
                         // work of receiving user
                         userModel.findByIdAndUpdate(req.body.receivingId,
-                            { $push: { connects: req.body.respondingId }, $pull: { sentRequests: req.body.respondingId } },
+                            {
+                                $push: { connects: req.body.respondingId },
+                                $pull: { sentRequests: req.body.respondingId }
+                            },
                             (err, result) => {
                                 if (err) {
                                     return res.json({
@@ -489,5 +503,96 @@ router.put('/respondConnectionRequest', (req, res) => {
         }
     });
 });
+
+router.put('/sendCallRequest', (req, res) => {
+
+    const authHeader = req.headers['authorization'];
+
+    const token = authHeader && authHeader.split(' ')[1];
+
+    // check if token is null
+    if (token == null) {
+        return res.json({
+            status: false,
+            message: 'Token is null !'
+        });
+    }
+
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
+        if (err) {
+            // if token doesn't matches
+            return res.json({
+                status: false,
+                message: 'Invalid token !',
+                error: err
+            });
+        }
+        else {
+            console.log('body : ');
+            console.log(req.body);
+            var fcmtoken;
+
+            userModel.findById(
+                req.body.receivingId,
+                (err, result) => {
+                    if (err) {
+                        return res.json({
+                            message: 'Could not place call',
+                            error: err
+                        })
+                    }
+                    else { fcmtoken = result['fcmToken']; }
+                }
+            );
+
+            firebaseAdmin.messaging().send({
+                notification: {
+                    title: message,
+                    body: ''
+                },
+                android: {
+                    notification: {
+                        color: '#bd02aa'
+                    },
+                    collapseKey: 'message',
+                },
+                data: {
+                    message: JSON.stringify(req.body.sendingId + ' calling you'),
+                    click_action: 'FLUTTER_NOTIFICATION_CLICK'
+                },
+                token: fcmtoken
+            }).then((resp) => {
+                console.log('Sent Notification to the User: ', resp);
+            }).catch((err) => {
+                console.log(Date.now(), ': Error sending fcm notification.', err);
+            });
+        }
+        // async function notifyUpdate(message, token, msg) {
+        //     if (!token) return;
+        //     admin.messaging().send({
+        //         notification: {
+        //             title: message,
+        //             body: ''
+        //         },
+        //         android: {
+        //             notification: {
+        //                 color: '#bd02aa'
+        //             },
+        //             collapseKey: 'message',
+        //         },
+        //         data: {
+        //             message: JSON.stringify(msg),
+        //             click_action: 'FLUTTER_NOTIFICATION_CLICK'
+        //         },
+        //         token: token
+        //     }).then((resp) => {
+        //         console.log('Sent Notification to the User: ', resp);
+        //     }).catch((err) => {
+        //         console.log(Date.now(), ': Error sending fcm notification.', err);
+        //     })
+        // }
+    });
+});
+
 
 module.exports = router;
