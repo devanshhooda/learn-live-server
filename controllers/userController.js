@@ -530,7 +530,7 @@ router.put('/sendCallRequest', (req, res) => {
         else {
             console.log('body : ');
             console.log(req.body);
-            var fcmtoken;
+            var fcmToken;
 
             userModel.findById(
                 req.body.receivingId,
@@ -541,58 +541,48 @@ router.put('/sendCallRequest', (req, res) => {
                             error: err
                         })
                     }
-                    else { fcmtoken = result['fcmToken']; }
+                    else {
+                        console.log('db result : ' + result);
+
+                        fcmToken = result.fcmToken;
+                        console.log('fcmToken : ' + fcmToken);
+
+                        sendCallNotificaton(fcmToken, req.body.callerName, req.body.sendingId, req.body.receivingId);
+                    }
                 }
             );
-
-            firebaseAdmin.messaging().send({
-                notification: {
-                    title: message,
-                    body: ''
-                },
-                android: {
-                    notification: {
-                        color: '#bd02aa'
-                    },
-                    collapseKey: 'message',
-                },
-                data: {
-                    message: JSON.stringify(req.body.sendingId + ' calling you'),
-                    click_action: 'FLUTTER_NOTIFICATION_CLICK'
-                },
-                token: fcmtoken
-            }).then((resp) => {
-                console.log('Sent Notification to the User: ', resp);
-            }).catch((err) => {
-                console.log(Date.now(), ': Error sending fcm notification.', err);
-            });
         }
-        // async function notifyUpdate(message, token, msg) {
-        //     if (!token) return;
-        //     admin.messaging().send({
-        //         notification: {
-        //             title: message,
-        //             body: ''
-        //         },
-        //         android: {
-        //             notification: {
-        //                 color: '#bd02aa'
-        //             },
-        //             collapseKey: 'message',
-        //         },
-        //         data: {
-        //             message: JSON.stringify(msg),
-        //             click_action: 'FLUTTER_NOTIFICATION_CLICK'
-        //         },
-        //         token: token
-        //     }).then((resp) => {
-        //         console.log('Sent Notification to the User: ', resp);
-        //     }).catch((err) => {
-        //         console.log(Date.now(), ': Error sending fcm notification.', err);
-        //     })
-        // }
     });
 });
 
+function sendCallNotificaton(fcmToken, callerName, sendingId, receivingId) {
+    firebaseAdmin.messaging().send({
+        notification: {
+            title: 'Learn live video call request',
+            body: callerName
+        },
+        android: {
+            notification: {
+                color: '#bd02aa'
+            },
+            collapseKey: 'message',
+        },
+        data: {
+            sendingId: JSON.stringify(sendingId),
+            receivingId: JSON.stringify(receivingId),
+            click_action: 'FLUTTER_NOTIFICATION_CLICK'
+        },
+        token: fcmToken
+    }).then((resp) => {
+        console.log('Sent Notification to the User: ', resp);
+        return res.json({
+            status: true,
+            message: 'Notification sent',
+            result: resp
+        });
+    }).catch((err) => {
+        console.log(Date.now(), ': Error sending fcm notification.', err);
+    });
+}
 
 module.exports = router;
