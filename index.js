@@ -4,9 +4,9 @@ const morgan = require('morgan');
 const userController = require('./controllers/userController');
 const port = process.env.PORT;
 const cors = require('cors');
-const databse = require('./database');
-
+const database = require('./database');
 const server = express();
+
 
 server.use(morgan('dev'));
 server.use(cors());
